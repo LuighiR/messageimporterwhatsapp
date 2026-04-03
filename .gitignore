@@ -1,0 +1,20 @@
+# Dependências
+node_modules/
+
+# Ambiente
+.env*
+!.env.example
+
+# Dados locais
+data/
+
+# Build (se usar Next/React)
+.next/
+dist/
+build/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
