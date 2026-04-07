@@ -25,12 +25,37 @@ Opcionalmente, voce tambem pode definir:
 
 ```powershell
 $env:PORT="4000"
+$env:JOB_KEY="SUA_CHAVE_X_JOB_KEY"
 $env:CORZ_BASE_URL="https://atende-api.corz.com.br/api"
 $env:DATABASE_PATH="data/importer.sqlite"
 $env:POSTGRES_URL="postgres://usuario:senha@host:5432/database?sslmode=disable"
 $env:POSTGRES_SCHEMA="core"
 $env:CORZ_RATE_LIMIT_REQUESTS="60"
 $env:CORZ_RATE_LIMIT_WINDOW_MS="60000"
+```
+
+## Seguranca Das Rotas
+
+As rotas operacionais agora exigem o header `x-job-key`.
+
+Rotas protegidas:
+
+- `/import/*`
+- `/jobs/*`
+- `/db/*`
+- `/core/*`
+
+Rotas publicas:
+
+- `/`
+- `/health`
+
+A chave e lida de `JOB_KEY` no `.env`.
+
+Exemplo:
+
+```powershell
+curl -H "x-job-key: Qw7nX9mP4tY2rL8kV6sD1hF3cJ5bN0uA" "http://localhost:4000/db/tickets?limit=10"
 ```
 
 ## Integracao Postgres Core
@@ -54,7 +79,7 @@ GET /core/clients
 ### Import de tickets para um tenant
 
 ```http
-POST /core/jobs/imports/start?clientId=ferracosul&page=1&ticketLimit=100&pages=all
+POST /core/jobs/imports/start?clientId=ferracosul&page=1&ticketLimit=100&pages=all&startDate=2026-04-01&endDate=2026-04-07
 ```
 
 ### Consultar job de tickets
@@ -98,7 +123,7 @@ GET /health
 ### Importar tickets e montar sessoes
 
 ```http
-GET /import/tickets?page=1&ticketLimit=100
+GET /import/tickets?page=1&ticketLimit=100&startDate=2026-04-01&endDate=2026-04-07
 ```
 
 Resposta:
@@ -106,6 +131,7 @@ Resposta:
 - `ticket`: dados normalizados do ticket
 - `sessions`: sessoes derivadas de `ticketTrakings`
 - `ticketLimit` vale para a API de tickets, que aceita `100`
+- `startDate` e `endDate` filtram os tickets por periodo na API externa
 - o contato basico vindo do ticket e pre-salvo no SQLite se ainda nao existir
 
 ### Importar mensagens de um ticket
@@ -122,7 +148,7 @@ Resposta:
 ### Snapshot completo do import
 
 ```http
-GET /import/tickets/:ticketUuid/snapshot?ticketPage=1&ticketLimit=100
+GET /import/tickets/:ticketUuid/snapshot?ticketPage=1&ticketLimit=100&startDate=2026-04-01&endDate=2026-04-07
 ```
 
 Resposta:
@@ -135,7 +161,7 @@ Resposta:
 ### Importar e persistir no SQLite
 
 ```http
-POST /import/tickets/:ticketUuid/persist?ticketPage=1&ticketLimit=100
+POST /import/tickets/:ticketUuid/persist?ticketPage=1&ticketLimit=100&startDate=2026-04-01&endDate=2026-04-07
 ```
 
 Resposta:
@@ -146,19 +172,19 @@ Resposta:
 ### Fluxo automatico em lote
 
 ```http
-POST /import/batch?page=1&ticketLimit=100&pages=1
+POST /import/batch?page=1&ticketLimit=100&pages=1&startDate=2026-04-01&endDate=2026-04-07
 ```
 
 Para varrer tudo:
 
 ```http
-POST /import/batch?page=1&ticketLimit=100&pages=all
+POST /import/batch?page=1&ticketLimit=100&pages=all&startDate=2026-04-01&endDate=2026-04-07
 ```
 
 Para testar antes com um freio:
 
 ```http
-POST /import/batch?page=1&ticketLimit=100&pages=all&maxPages=10
+POST /import/batch?page=1&ticketLimit=100&pages=all&maxPages=10&startDate=2026-04-01&endDate=2026-04-07
 ```
 
 Esse endpoint executa o fluxo completo sozinho:
@@ -173,6 +199,7 @@ Parametros:
 
 - `page`: pagina inicial dos tickets
 - `ticketLimit`: quantidade de tickets por pagina
+- `startDate` e `endDate`: recorte opcional de datas repassado para a API de tickets
 - `pages`: quantas paginas consecutivas importar, ou `all` para varrer ate a ultima pagina
 - `maxPages`: freio opcional quando usar `pages=all`
 - `persist=false`: executa o fluxo sem gravar no SQLite
@@ -182,7 +209,7 @@ Parametros:
 Para o varrimento total com retomada segura, use o job assíncrono:
 
 ```http
-POST /jobs/imports/start?page=1&ticketLimit=100&pages=all
+POST /jobs/imports/start?page=1&ticketLimit=100&pages=all&startDate=2026-04-01&endDate=2026-04-07
 ```
 
 Consultar status:
@@ -215,6 +242,7 @@ Como funciona:
 - o checkpoint fica salvo no SQLite por pagina e posicao do ticket
 - se o processo cair, voce sobe o servico de novo e chama `resume`
 - o job guarda contadores de paginas, tickets importados, falhas e o ticket atual
+- o job tambem guarda `startDate` e `endDate`, entao o `resume` continua no mesmo range
 - apenas um job pode ficar `running` por vez
 - se voce iniciou com `maxPages`, pode limpar esse limite no `resume?maxPages=0`
 

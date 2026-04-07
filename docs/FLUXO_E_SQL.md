@@ -16,6 +16,26 @@ Hoje o modo principal e:
 
 O modo SQLite continua existindo como ambiente local de teste, mas nao e mais o fluxo principal da integracao.
 
+## Seguranca Das Rotas
+
+As rotas operacionais do servico exigem o header:
+
+```http
+x-job-key: {JOB_KEY}
+```
+
+Rotas protegidas:
+
+- `/import/*`
+- `/jobs/*`
+- `/db/*`
+- `/core/*`
+
+Rotas publicas:
+
+- `/`
+- `/health`
+
 ## Fluxo Atual No Postgres Core
 
 ### 1. Descoberta do tenant
@@ -42,12 +62,13 @@ Consequencias praticas:
 Para um tenant, o job chama:
 
 ```http
-GET /api/ticket?page={page}&limit={ticketLimit}
+GET /api/ticket?page={page}&limit={ticketLimit}&startDate={startDate}&endDate={endDate}
 ```
 
 Regras:
 
 - `ticketLimit` pode ir ate `100`
+- `startDate` e `endDate` sao repassados para o endpoint de tickets quando informados
 - cada ticket ja traz `uuid`, `ticketTrakings`, `contact` e metadados gerais
 - o job salva checkpoint por pagina e por posicao do ticket dentro da pagina
 
@@ -165,7 +186,7 @@ Persistencia:
 Endpoints:
 
 ```http
-POST /core/jobs/imports/start?clientId=ferracosul&page=1&ticketLimit=100&pages=all
+POST /core/jobs/imports/start?clientId=ferracosul&page=1&ticketLimit=100&pages=all&startDate=2026-04-01&endDate=2026-04-07
 GET /core/jobs/imports?clientId=ferracosul&limit=20
 GET /core/jobs/imports/:jobId
 POST /core/jobs/imports/:jobId/resume
@@ -179,6 +200,8 @@ Checkpoint salvo em `core.import_jobs`:
 - `next_ticket_offset`
 - `current_ticket_uuid`
 - `limit_per_page`
+- `start_date`
+- `end_date`
 - `pages_requested`
 - `sweep_all`
 - `max_pages`
@@ -194,6 +217,7 @@ Regra de concorrencia:
 
 - so pode existir um import `running` por tenant
 - um tenant nao bloqueia o `start` ou `resume` de outro tenant
+- o `resume` reutiliza o mesmo range salvo em `start_date` e `end_date`
 
 ### Sync de contatos
 
@@ -555,6 +579,8 @@ pages_requested integer,
 sweep_all integer not null,
 max_pages integer,
 persist integer not null,
+start_date text,
+end_date text,
 total_pages integer,
 pages_processed integer not null,
 tickets_seen integer not null,
@@ -572,6 +598,12 @@ Ajuste aplicado para suporte multi-tenant:
 ```sql
 ALTER TABLE core.import_jobs
 ADD COLUMN IF NOT EXISTS client_id text;
+
+ALTER TABLE core.import_jobs
+ADD COLUMN IF NOT EXISTS start_date text;
+
+ALTER TABLE core.import_jobs
+ADD COLUMN IF NOT EXISTS end_date text;
 
 CREATE INDEX IF NOT EXISTS idx_import_jobs_client_id
 ON core.import_jobs (client_id);

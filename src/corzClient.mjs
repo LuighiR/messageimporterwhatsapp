@@ -44,8 +44,8 @@ export class CorzClient {
     return response.json();
   }
 
-  async listTickets({ page = 1, limit = 20 } = {}) {
-    return this.request("ticket", { page, limit });
+  async listTickets({ page = 1, limit = 20, uuid = null, number = null, startDate = null, endDate = null } = {}) {
+    return this.request("ticket", { page, limit, uuid, number, startDate, endDate });
   }
 
   async listMessagesByTicketUuid(ticketUuid, { page = 1, limit = 100 } = {}) {

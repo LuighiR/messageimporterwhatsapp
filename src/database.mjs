@@ -123,6 +123,8 @@ export class ImporterDatabase {
         sweep_all INTEGER NOT NULL DEFAULT 0,
         max_pages INTEGER,
         persist INTEGER NOT NULL DEFAULT 1,
+        start_date TEXT,
+        end_date TEXT,
         total_pages INTEGER,
         pages_processed INTEGER NOT NULL DEFAULT 0,
         tickets_seen INTEGER NOT NULL DEFAULT 0,
@@ -221,6 +223,18 @@ export class ImporterDatabase {
       CREATE INDEX IF NOT EXISTS idx_contact_sync_jobs_status ON contact_sync_jobs(status);
       CREATE INDEX IF NOT EXISTS idx_contact_sync_job_errors_job_id ON contact_sync_job_errors(job_id);
     `);
+
+    this.ensureColumn("import_jobs", "start_date", "TEXT");
+    this.ensureColumn("import_jobs", "end_date", "TEXT");
+  }
+
+  ensureColumn(tableName, columnName, columnDefinition) {
+    const columns = this.db.prepare(`PRAGMA table_info(${tableName})`).all();
+    const exists = columns.some((column) => column.name === columnName);
+
+    if (!exists) {
+      this.db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnDefinition}`);
+    }
   }
 
   persistSnapshot(snapshot) {
@@ -503,17 +517,17 @@ export class ImporterDatabase {
     };
   }
 
-  createImportJob({ page, limit, pages, sweepAll, maxPages, persist }) {
+  createImportJob({ page, limit, pages, sweepAll, maxPages, persist, startDate = null, endDate = null }) {
     const now = new Date().toISOString();
     const result = this.db.prepare(`
       INSERT INTO import_jobs (
         status, start_page, current_page, next_ticket_offset, current_ticket_uuid,
-        limit_per_page, pages_requested, sweep_all, max_pages, persist,
+        limit_per_page, pages_requested, sweep_all, max_pages, persist, start_date, end_date,
         total_pages, pages_processed, tickets_seen, tickets_imported, tickets_failed,
         status_message, started_at, updated_at, finished_at
       ) VALUES (
         @status, @start_page, @current_page, @next_ticket_offset, @current_ticket_uuid,
-        @limit_per_page, @pages_requested, @sweep_all, @max_pages, @persist,
+        @limit_per_page, @pages_requested, @sweep_all, @max_pages, @persist, @start_date, @end_date,
         @total_pages, @pages_processed, @tickets_seen, @tickets_imported, @tickets_failed,
         @status_message, @started_at, @updated_at, @finished_at
       )
@@ -528,6 +542,8 @@ export class ImporterDatabase {
       sweep_all: toBooleanInteger(sweepAll),
       max_pages: maxPages,
       persist: toBooleanInteger(persist),
+      start_date: startDate,
+      end_date: endDate,
       total_pages: null,
       pages_processed: 0,
       tickets_seen: 0,
@@ -635,6 +651,8 @@ export class ImporterDatabase {
       sweepAll: Boolean(row.sweep_all),
       maxPages: row.max_pages,
       persist: Boolean(row.persist),
+      startDate: row.start_date,
+      endDate: row.end_date,
       totalPages: row.total_pages,
       pagesProcessed: row.pages_processed,
       ticketsSeen: row.tickets_seen,

@@ -69,6 +69,14 @@ export class CoreRepository {
       ADD COLUMN IF NOT EXISTS client_id text
     `);
     await this.pool.query(`
+      ALTER TABLE ${this.schema}.import_jobs
+      ADD COLUMN IF NOT EXISTS start_date text
+    `);
+    await this.pool.query(`
+      ALTER TABLE ${this.schema}.import_jobs
+      ADD COLUMN IF NOT EXISTS end_date text
+    `);
+    await this.pool.query(`
       ALTER TABLE ${this.schema}.contact_sync_jobs
       ADD COLUMN IF NOT EXISTS client_id text
     `);
@@ -574,19 +582,29 @@ export class CoreRepository {
     };
   }
 
-  async createImportJob({ clientId, page, limit, pages, sweepAll, maxPages, persist }) {
+  async createImportJob({
+    clientId,
+    page,
+    limit,
+    pages,
+    sweepAll,
+    maxPages,
+    persist,
+    startDate = null,
+    endDate = null
+  }) {
     const result = await this.pool.query(
       `
         INSERT INTO ${this.schema}.import_jobs (
           client_id, status, start_page, current_page, next_ticket_offset, current_ticket_uuid,
-          limit_per_page, pages_requested, sweep_all, max_pages, persist, total_pages,
+          limit_per_page, pages_requested, sweep_all, max_pages, persist, start_date, end_date, total_pages,
           pages_processed, tickets_seen, tickets_imported, tickets_failed, status_message,
           started_at, updated_at, finished_at
         ) VALUES (
           $1, $2, $3, $4, $5, $6,
-          $7, $8, $9, $10, $11, $12,
-          $13, $14, $15, $16, $17,
-          $18, $19, $20
+          $7, $8, $9, $10, $11, $12, $13, $14,
+          $15, $16, $17, $18, $19,
+          $20, $21, $22
         )
         RETURNING *
       `,
@@ -602,6 +620,8 @@ export class CoreRepository {
         sweepAll ? 1 : 0,
         maxPages,
         persist ? 1 : 0,
+        startDate,
+        endDate,
         null,
         0,
         0,

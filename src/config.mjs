@@ -14,6 +14,7 @@ export function getConfig() {
 
   return {
     apiKey,
+    jobKey: process.env.JOB_KEY || process.env.job_key || null,
     baseUrl: process.env.CORZ_BASE_URL || DEFAULT_BASE_URL,
     port: Number.parseInt(process.env.PORT || `${DEFAULT_PORT}`, 10),
     databasePath: process.env.DATABASE_PATH || DEFAULT_DATABASE_PATH,

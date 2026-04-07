@@ -25,7 +25,17 @@ export class CoreImportJobRunner {
     };
   }
 
-  async startJob({ clientId, page = 1, limit = 100, pages = 1, sweepAll = true, maxPages = null, persist = true }) {
+  async startJob({
+    clientId,
+    page = 1,
+    limit = 100,
+    pages = 1,
+    sweepAll = true,
+    maxPages = null,
+    persist = true,
+    startDate = null,
+    endDate = null
+  }) {
     const runningJob = await this.repository.getRunningImportJob(clientId);
     if (runningJob) {
       throw new Error(`There is already a running import job for client ${clientId} (${runningJob.job_id}).`);
@@ -43,7 +53,9 @@ export class CoreImportJobRunner {
       pages,
       sweepAll,
       maxPages,
-      persist
+      persist,
+      startDate,
+      endDate
     });
 
     this.runInBackground(job.job_id);
@@ -118,7 +130,9 @@ export class CoreImportJobRunner {
         );
         const payload = await apiClient.listTickets({
           page: job.current_page,
-          limit: job.limit_per_page
+          limit: job.limit_per_page,
+          startDate: job.start_date || null,
+          endDate: job.end_date || null
         });
         const tickets = payload.data || [];
         const totalPages = Number(payload.pagination?.totalPages || 0) || null;

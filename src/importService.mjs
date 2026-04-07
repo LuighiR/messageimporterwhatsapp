@@ -36,6 +36,8 @@ export class TicketImportService {
     page = 1,
     limit = 5,
     pages = 1,
+    startDate = null,
+    endDate = null,
     persist = true,
     sweepAll = false,
     maxPages = null,
@@ -52,7 +54,12 @@ export class TicketImportService {
 
     while (true) {
       this.logger?.log(`[batch] fetching tickets page ${currentPage} with limit ${limit}`);
-      const ticketsPayload = await this.client.listTickets({ page: currentPage, limit });
+      const ticketsPayload = await this.client.listTickets({
+        page: currentPage,
+        limit,
+        startDate,
+        endDate
+      });
       const tickets = ticketsPayload.data || [];
       totalPages = Number(ticketsPayload.pagination?.totalPages || totalPages || 0) || null;
       pagesProcessed += 1;
@@ -124,6 +131,8 @@ export class TicketImportService {
       startedAt,
       finishedAt,
       page,
+      startDate,
+      endDate,
       totalPages,
       sweepAll,
       pagesRequested: pages,

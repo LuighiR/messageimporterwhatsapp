@@ -24,7 +24,16 @@ export class ImportJobRunner {
     };
   }
 
-  startJob({ page = 1, limit = 100, pages = 1, sweepAll = false, maxPages = null, persist = true }) {
+  startJob({
+    page = 1,
+    limit = 100,
+    pages = 1,
+    sweepAll = false,
+    maxPages = null,
+    persist = true,
+    startDate = null,
+    endDate = null
+  }) {
     const runningJob = this.database.getRunningImportJob();
     if (runningJob) {
       throw new Error(`There is already a running job (${runningJob.jobId}).`);
@@ -36,7 +45,9 @@ export class ImportJobRunner {
       pages,
       sweepAll,
       maxPages,
-      persist
+      persist,
+      startDate,
+      endDate
     });
 
     this.runInBackground(job.jobId);
@@ -103,7 +114,9 @@ export class ImportJobRunner {
         this.logger?.log(`[job] fetching ticket page ${job.currentPage} with limit ${job.limitPerPage}`);
         const payload = await this.client.listTickets({
           page: job.currentPage,
-          limit: job.limitPerPage
+          limit: job.limitPerPage,
+          startDate: job.startDate,
+          endDate: job.endDate
         });
         const tickets = payload.data || [];
         const totalPages = Number(payload.pagination?.totalPages || 0) || null;

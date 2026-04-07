@@ -16,18 +16,32 @@ function sendJson(response, statusCode, payload) {
   response.end(JSON.stringify(payload, null, 2));
 }
 
+function sendUnauthorized(response) {
+  sendJson(response, 401, {
+    error: "Unauthorized",
+    message: "Provide the x-job-key header with a valid key."
+  });
+}
+
+function sendMissingJobKey(response) {
+  sendJson(response, 500, {
+    error: "Server misconfigured",
+    message: "JOB_KEY is not configured on the server."
+  });
+}
+
 function sendNotFound(response) {
   sendJson(response, 404, {
     error: "Not found",
     availableRoutes: [
       "GET /health",
-      "GET /import/tickets?page=1&ticketLimit=100",
+      "GET /import/tickets?page=1&ticketLimit=100&startDate=2026-04-01&endDate=2026-04-07",
       "GET /import/tickets/:ticketUuid/messages?page=1&limit=20",
-      "GET /import/tickets/:ticketUuid/snapshot?ticketPage=1&ticketLimit=100",
-      "POST /import/tickets/:ticketUuid/persist?ticketPage=1&ticketLimit=100",
-      "POST /import/batch?page=1&ticketLimit=100&pages=1",
-      "POST /import/batch?page=1&ticketLimit=100&pages=all&maxPages=10",
-      "POST /jobs/imports/start?page=1&ticketLimit=100&pages=all",
+      "GET /import/tickets/:ticketUuid/snapshot?ticketPage=1&ticketLimit=100&startDate=2026-04-01&endDate=2026-04-07",
+      "POST /import/tickets/:ticketUuid/persist?ticketPage=1&ticketLimit=100&startDate=2026-04-01&endDate=2026-04-07",
+      "POST /import/batch?page=1&ticketLimit=100&pages=1&startDate=2026-04-01&endDate=2026-04-07",
+      "POST /import/batch?page=1&ticketLimit=100&pages=all&maxPages=10&startDate=2026-04-01&endDate=2026-04-07",
+      "POST /jobs/imports/start?page=1&ticketLimit=100&pages=all&startDate=2026-04-01&endDate=2026-04-07",
       "POST /jobs/imports/:jobId/resume",
       "GET /jobs/imports?limit=20",
       "GET /jobs/imports/:jobId",
@@ -40,7 +54,7 @@ function sendNotFound(response) {
       "GET /db/contacts?limit=50",
       "GET /db/contacts/:contactId",
       "GET /core/clients",
-      "POST /core/jobs/imports/start?clientId=ferracosul&page=1&ticketLimit=100&pages=all",
+      "POST /core/jobs/imports/start?clientId=ferracosul&page=1&ticketLimit=100&pages=all&startDate=2026-04-01&endDate=2026-04-07",
       "GET /core/jobs/imports/:jobId",
       "POST /core/jobs/imports/:jobId/resume",
       "POST /core/jobs/contacts/start?clientId=ferracosul&page=1&contactLimit=100&pages=all",
@@ -64,8 +78,43 @@ function getPagination(searchParams, defaultLimit, maxLimit = null) {
   };
 }
 
+function getTicketDateFilters(searchParams) {
+  const readFilter = (key) => {
+    const value = searchParams.get(key);
+    return value && value.trim() ? value.trim() : null;
+  };
+
+  return {
+    startDate: readFilter("startDate"),
+    endDate: readFilter("endDate")
+  };
+}
+
 function pickTicketByUuid(payload, ticketUuid) {
   return (payload.data || []).find((ticket) => ticket.uuid === ticketUuid) || null;
+}
+
+function isProtectedPath(pathname) {
+  if (pathname === "/" || pathname === "/health") {
+    return false;
+  }
+
+  return (
+    pathname.startsWith("/import/") ||
+    pathname.startsWith("/jobs/") ||
+    pathname.startsWith("/db/") ||
+    pathname.startsWith("/core/")
+  );
+}
+
+function readJobKeyHeader(headers) {
+  const value = headers["x-job-key"];
+
+  if (Array.isArray(value)) {
+    return value[0] || null;
+  }
+
+  return value || null;
 }
 
 async function createServer() {
@@ -149,19 +198,30 @@ async function createServer() {
     console.log(`[http] ${request.method} ${pathname}${url.search}`);
 
     try {
+      if (isProtectedPath(pathname)) {
+        if (!config.jobKey) {
+          return sendMissingJobKey(response);
+        }
+
+        const providedJobKey = readJobKeyHeader(request.headers);
+        if (providedJobKey !== config.jobKey) {
+          return sendUnauthorized(response);
+        }
+      }
+
       if (pathname === "/" && request.method === "GET") {
         return sendJson(response, 200, {
           service: "dkw-message-importer-test",
           status: "running",
           quickStart: [
             "GET /health",
-            "GET /import/tickets?page=1&ticketLimit=100",
+            "GET /import/tickets?page=1&ticketLimit=100&startDate=2026-04-01&endDate=2026-04-07",
             "GET /import/tickets/:ticketUuid/messages?page=1&limit=20",
-            "GET /import/tickets/:ticketUuid/snapshot?ticketPage=1&ticketLimit=100",
-            "POST /import/tickets/:ticketUuid/persist?ticketPage=1&ticketLimit=100",
-            "POST /import/batch?page=1&ticketLimit=100&pages=1",
-            "POST /import/batch?page=1&ticketLimit=100&pages=all&maxPages=10",
-            "POST /jobs/imports/start?page=1&ticketLimit=100&pages=all",
+            "GET /import/tickets/:ticketUuid/snapshot?ticketPage=1&ticketLimit=100&startDate=2026-04-01&endDate=2026-04-07",
+            "POST /import/tickets/:ticketUuid/persist?ticketPage=1&ticketLimit=100&startDate=2026-04-01&endDate=2026-04-07",
+            "POST /import/batch?page=1&ticketLimit=100&pages=1&startDate=2026-04-01&endDate=2026-04-07",
+            "POST /import/batch?page=1&ticketLimit=100&pages=all&maxPages=10&startDate=2026-04-01&endDate=2026-04-07",
+            "POST /jobs/imports/start?page=1&ticketLimit=100&pages=all&startDate=2026-04-01&endDate=2026-04-07",
             "POST /jobs/imports/:jobId/resume",
             "GET /jobs/imports?limit=20",
             "GET /jobs/imports/:jobId",
@@ -174,7 +234,7 @@ async function createServer() {
             "GET /db/contacts?limit=50",
             "GET /db/contacts/:contactId",
             "GET /core/clients",
-            "POST /core/jobs/imports/start?clientId=ferracosul&page=1&ticketLimit=100&pages=all",
+            "POST /core/jobs/imports/start?clientId=ferracosul&page=1&ticketLimit=100&pages=all&startDate=2026-04-01&endDate=2026-04-07",
             "GET /core/jobs/imports/:jobId",
             "POST /core/jobs/imports/:jobId/resume",
             "POST /core/jobs/contacts/start?clientId=ferracosul&page=1&contactLimit=100&pages=all",
@@ -205,9 +265,14 @@ async function createServer() {
           ticketsSearchParams.set("limit", searchParams.get("ticketLimit"));
         }
         const { page, limit } = getPagination(ticketsSearchParams, 100);
-        const payload = await client.listTickets({ page, limit });
+        const { startDate, endDate } = getTicketDateFilters(searchParams);
+        const payload = await client.listTickets({ page, limit, startDate, endDate });
 
         return sendJson(response, 200, {
+          filters: {
+            startDate,
+            endDate
+          },
           pagination: payload.pagination,
           tickets: (payload.data || []).map((ticket) => ({
             ticket: normalizeTicket(ticket),
@@ -244,9 +309,15 @@ async function createServer() {
         const [, ticketUuid] = snapshotMatch;
         const ticketPage = Number.parseInt(searchParams.get("ticketPage") || searchParams.get("page") || "1", 10);
         const ticketLimit = Number.parseInt(searchParams.get("ticketLimit") || "100", 10);
+        const { startDate, endDate } = getTicketDateFilters(searchParams);
         console.log(`[import] building snapshot for ticket ${ticketUuid} using ticketPage=${ticketPage} ticketLimit=${ticketLimit}`);
 
-        const ticketsPayload = await client.listTickets({ page: ticketPage, limit: ticketLimit });
+        const ticketsPayload = await client.listTickets({
+          page: ticketPage,
+          limit: ticketLimit,
+          startDate,
+          endDate
+        });
         const ticket = pickTicketByUuid(ticketsPayload, ticketUuid);
 
         if (!ticket) {
@@ -266,9 +337,15 @@ async function createServer() {
         const [, ticketUuid] = persistMatch;
         const ticketPage = Number.parseInt(searchParams.get("ticketPage") || "1", 10);
         const ticketLimit = Number.parseInt(searchParams.get("ticketLimit") || "100", 10);
+        const { startDate, endDate } = getTicketDateFilters(searchParams);
         console.log(`[import] persisting ticket ${ticketUuid} using ticketPage=${ticketPage} ticketLimit=${ticketLimit}`);
 
-        const ticketsPayload = await client.listTickets({ page: ticketPage, limit: ticketLimit });
+        const ticketsPayload = await client.listTickets({
+          page: ticketPage,
+          limit: ticketLimit,
+          startDate,
+          endDate
+        });
         const ticket = pickTicketByUuid(ticketsPayload, ticketUuid);
 
         if (!ticket) {
@@ -306,6 +383,7 @@ async function createServer() {
         const maxPages = Number.parseInt(searchParams.get("maxPages") || "0", 10);
         const persist = searchParams.get("persist") !== "false";
         const sweepAll = rawPages === "all";
+        const { startDate, endDate } = getTicketDateFilters(searchParams);
         console.log(
           `[batch] starting automatic flow page=${page} ticketLimit=${ticketLimit} pages=${rawPages} maxPages=${maxPages || "none"} persist=${persist}`
         );
@@ -314,6 +392,8 @@ async function createServer() {
           page: Number.isNaN(page) || page < 1 ? 1 : page,
           limit: Number.isNaN(ticketLimit) || ticketLimit < 1 ? 100 : ticketLimit,
           pages: sweepAll || Number.isNaN(pages) || pages < 1 ? 1 : pages,
+          startDate,
+          endDate,
           sweepAll,
           maxPages: Number.isNaN(maxPages) || maxPages < 1 ? null : maxPages,
           persist
@@ -333,11 +413,14 @@ async function createServer() {
         const maxPages = Number.parseInt(searchParams.get("maxPages") || "0", 10);
         const persist = searchParams.get("persist") !== "false";
         const sweepAll = rawPages === "all";
+        const { startDate, endDate } = getTicketDateFilters(searchParams);
 
         const job = jobRunner.startJob({
           page: Number.isNaN(page) || page < 1 ? 1 : page,
           limit: Number.isNaN(ticketLimit) || ticketLimit < 1 ? 100 : ticketLimit,
           pages: sweepAll || Number.isNaN(pages) || pages < 1 ? 1 : pages,
+          startDate,
+          endDate,
           sweepAll,
           maxPages: Number.isNaN(maxPages) || maxPages < 1 ? null : maxPages,
           persist
@@ -505,6 +588,7 @@ async function createServer() {
           const maxPages = Number.parseInt(searchParams.get("maxPages") || "0", 10);
           const persist = searchParams.get("persist") !== "false";
           const sweepAll = rawPages === "all";
+          const { startDate, endDate } = getTicketDateFilters(searchParams);
 
           if (!clientId) {
             return sendJson(response, 400, { error: "clientId is required." });
@@ -515,6 +599,8 @@ async function createServer() {
             page: Number.isNaN(page) || page < 1 ? 1 : page,
             limit: Number.isNaN(ticketLimit) || ticketLimit < 1 ? 100 : ticketLimit,
             pages: sweepAll || Number.isNaN(pages) || pages < 1 ? 1 : pages,
+            startDate,
+            endDate,
             sweepAll,
             maxPages: Number.isNaN(maxPages) || maxPages < 1 ? null : maxPages,
             persist
